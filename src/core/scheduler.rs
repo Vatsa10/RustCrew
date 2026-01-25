@@ -2,7 +2,7 @@ use crate::core::crew::Crew;
 use crate::core::task::TaskStatus;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use uuid::Uuid;
 use futures::stream::{StreamExt, FuturesUnordered};
 
@@ -77,7 +77,7 @@ impl Scheduler {
     }
 
     async fn execute_task(crew: Arc<Mutex<Crew>>, task_id: Uuid) {
-        let (description, agent_id) = {
+        let (description, _agent_id) = {
             let mut crew_lock = crew.lock().await;
             if let Some(task) = crew_lock.task_map.get_mut(&task_id) {
                 task.status = TaskStatus::Running;

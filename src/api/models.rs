@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use crate::core::agent::Agent;
-use crate::core::task::Task;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateCrewRequest {

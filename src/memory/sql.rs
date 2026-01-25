@@ -46,23 +46,27 @@ impl SqlMemory {
     }
 
     pub async fn get_task(&self, id: Uuid) -> Result<Option<Task>, sqlx::Error> {
-        let row = sqlx::query!(
-            "SELECT * FROM tasks WHERE id = ?",
-            id.to_string()
+        let row = sqlx::query(
+            "SELECT id, description, expected_output, assigned_agent_id, status, output FROM tasks WHERE id = ?"
         )
+        .bind(id.to_string())
         .fetch_optional(&self.pool)
         .await?;
 
         if let Some(row) = row {
-            let status: TaskStatus = serde_json::from_str(&row.status).unwrap_or(TaskStatus::Pending);
+            use sqlx::Row;
+            let status_str: String = row.get("status");
+            let status: TaskStatus = serde_json::from_str(&status_str).unwrap_or(TaskStatus::Pending);
+            let agent_id_str: Option<String> = row.get("assigned_agent_id");
+            
             Ok(Some(Task {
-                id: Uuid::parse_str(&row.id).unwrap_or_default(),
-                description: row.description,
-                expected_output: row.expected_output,
-                assigned_agent_id: row.assigned_agent_id.and_then(|s| Uuid::parse_str(&s).ok()),
-                dependencies: Vec::new(), // TODO: Store dependencies in a separate table
+                id: Uuid::parse_str(row.get("id")).unwrap_or_default(),
+                description: row.get("description"),
+                expected_output: row.get("expected_output"),
+                assigned_agent_id: agent_id_str.and_then(|s| Uuid::parse_str(&s).ok()),
+                dependencies: Vec::new(),
                 status,
-                output: row.output,
+                output: row.get("output"),
             }))
         } else {
             Ok(None)
