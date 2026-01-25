@@ -9,9 +9,18 @@
 - **Asynchronous Service**: Built on top of `tokio` and `axum` as a managed service for remote agent orchestration.
 - **DAG-Based Task Scheduling**: Implements a directed acyclic graph (DAG) scheduler that resolves dependencies and parallelizes independent tasks.
 - **Persistent Memory**: Deep integration with `sqlx` providing SQLite/Postgres persistence for long-running workflows and auditability.
-- **RESTful Orchestration**: Standardized API for managing Crew specifications and monitoring background execution runs.
+- **RESTful Orchestration**: Standardized API for managing Crew specifications, tracking task state, and monitoring execution runs.
 - **Role-Based Agent Model**: Define agents with discrete roles, operational goals, and backstories for specialized execution.
-- **Tooling Interface**: A standard `Tool` trait that enables external capabilities such as HTTP requests, browser automation, and data retrieval.
+- **Extensible Tooling**: A robust `Tool` trait for building custom capabilities with built-in support for network and filesystem operations.
+
+---
+
+## Built-in Tools
+
+RustCrew includes a standard library of tools to accelerate agent development:
+
+- **HttpClient**: Asynchronous GET request tool using `reqwest` for web data retrieval.
+- **FileLoader**: Secure local file access using `tokio::fs` for context loading.
 
 ---
 
@@ -77,17 +86,18 @@ RustCrew is engineered with modularity at its core:
 
 - **API Layer**: Axum-based endpoints for managing resources and internal state.
 - **Execution Engine**: An asynchronous scheduler that manages the task lifecycle and worker synchronization.
-- **Persistence Layer**: SQL-backed storage using `sqlx` for task tracking and execution history.
+- **Persistence Layer**: SQL-backed storage using `sqlx` (SQLite/Postgres) for task tracking and execution history.
+- **Memory System**: Hybrid architecture supporting thread-safe in-memory caching and persistent SQL storage.
 - **Agent Sandbox**: Encapsulates the logic, tools, and memory scope for specific agent roles.
 
 ---
 
 ## Roadmap
 
-- **Inference Adapters**: Integration with OpenAI, Anthropic, and local LLM backends (via candle).
-- **Advanced Observability**: Distributed tracing and metrics export via OpenTelemetry.
-- **Streamed Execution**: WebSocket/Server-Sent Events for real-time progress monitoring.
-- **Sandboxing**: WASM-based tool execution for secure, isolated operations.
+- [ ] **Inference Adapters**: Integration with OpenAI, Anthropic, and local LLM backends (via candle).
+- [ ] **Advanced Observability**: Distributed tracing and metrics export via OpenTelemetry.
+- [ ] **Streamed Execution**: WebSocket/Server-Sent Events for real-time progress monitoring.
+- [ ] **Sandboxing**: WASM-based tool execution for secure, isolated operations.
 
 ---
 
