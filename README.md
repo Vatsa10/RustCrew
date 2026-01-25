@@ -6,79 +6,68 @@
 
 ## Core Features
 
-- **Asynchronous Runtime**: Built on top of `tokio` for efficient resource management and high-concurrency execution.
+- **Asynchronous Service**: Built on top of `tokio` and `axum` as a managed service for remote agent orchestration.
 - **DAG-Based Task Scheduling**: Implements a directed acyclic graph (DAG) scheduler that resolves dependencies and parallelizes independent tasks.
+- **Persistent Memory**: Deep integration with `sqlx` providing SQLite/Postgres persistence for long-running workflows and auditability.
+- **RESTful Orchestration**: Standardized API for managing Crew specifications and monitoring background execution runs.
 - **Role-Based Agent Model**: Define agents with discrete roles, operational goals, and backstories for specialized execution.
 - **Tooling Interface**: A standard `Tool` trait that enables external capabilities such as HTTP requests, browser automation, and data retrieval.
-- **Concurrent Memory Access**: Thread-safe in-memory state management using concurrent data structures for agent and crew context.
-- **Deterministic Replay Ready**: Designed to support recorded execution traces for auditing and debugging.
 
 ---
 
-## Technical Quick Start
+## Technical Start
 
-### Dependency Configuration
+### Running the Orchestrator
 
-Include `rustcrew` in your `Cargo.toml`:
+Start the RustCrew server:
 
-```toml
-[dependencies]
-rustcrew = { git = "https://github.com/Vatsa10/RustCrew" }
+```bash
+cargo run
 ```
 
-### Implementation Example
+The server will listen on `0.0.0.0:3000` by default.
 
-The following example demonstrates a multi-agent workflow where a writer task is dependent on the completion of a research task.
+### API Integration Example
 
-```rust
-use rustcrew::core::agent::Agent;
-use rustcrew::core::task::Task;
-use rustcrew::core::crew::Crew;
-use rustcrew::core::scheduler::Scheduler;
+You can define a crew and initiate a run via the REST API. The following demonstrates creating a research-driven workflow:
 
-#[tokio::main]
-async fn main() {
-    // 1. Initialize specialised agents
-    let researcher = Agent::new(
-        "Researcher",
-        "Technical Analyst",
-        "Investigate Rust async memory safety patterns",
-        "Expert in systems programming and memory management."
-    );
-    let researcher_id = researcher.id;
+**1. Create a Crew (POST /api/v1/crews)**
 
-    let writer = Agent::new(
-        "Writer",
-        "Documentation Engineer",
-        "Compile technical findings into a concise summary",
-        "Specializes in technical communication and precision."
-    );
-    let writer_id = writer.id;
-
-    // 2. Define Tasks and dependency graph
-    let research_task = Task::new(
-        "Analyze memory safety in async contexts",
-        "A structured report on safety patterns"
-    ).assign_agent(researcher_id);
-    let research_task_id = research_task.id;
-
-    let write_task = Task::new(
-        "Summarize analysis",
-        "A technical summary document"
-    ).assign_agent(writer_id)
-     .add_dependency(research_task_id);
-
-    // 3. Orchestrate Crew execution
-    let mut crew = Crew::new(vec![researcher, writer]);
-    crew.add_task(research_task);
-    crew.add_task(write_task);
-
-    let scheduler = Scheduler::new(crew);
-    if let Err(e) = scheduler.run().await {
-        eprintln!("Workflow execution error: {}", e);
+```json
+{
+  "name": "Market Analysis Crew",
+  "agents": [
+    {
+      "name": "Researcher",
+      "role": "Technical Analyst",
+      "goal": "Identify 3 core trends in Rust ecosystem",
+      "backstory": "Specialist in systems programming analysis."
+    },
+    {
+      "name": "Writer",
+      "role": "Technical Writer",
+      "goal": "Summarize the identified trends",
+      "backstory": "Expert at technical documentation."
     }
+  ],
+  "tasks": [
+    {
+      "description": "Research ecosystem trends",
+      "expected_output": "List of 3 trends",
+      "agent_index": 0
+    },
+    {
+      "description": "Write summary",
+      "expected_output": "Markdown summary report",
+      "agent_index": 1
+    }
+  ]
 }
 ```
+
+**2. Trigger an Execution Run (POST /api/v1/crews/{id}/runs)**
+
+Initiates the background scheduler to resolve the task graph.
 
 ---
 
@@ -86,19 +75,18 @@ async fn main() {
 
 RustCrew is engineered with modularity at its core:
 
-- **Agent Engine**: Encapsulates the logic, tools, and memory scope for a specific role.
-- **Task Management**: Manages state transitions (Pending, Running, Completed, Failed) and output handling.
-- **Orchestration Runtime**: A scheduler that manages the task lifecycle and handles async worker synchronization.
-- **Tool Router**: A unified interface for agents to interact with system-level or external services.
+- **API Layer**: Axum-based endpoints for managing resources and internal state.
+- **Execution Engine**: An asynchronous scheduler that manages the task lifecycle and worker synchronization.
+- **Persistence Layer**: SQL-backed storage using `sqlx` for task tracking and execution history.
+- **Agent Sandbox**: Encapsulates the logic, tools, and memory scope for specific agent roles.
 
 ---
 
 ## Roadmap
 
 - **Inference Adapters**: Integration with OpenAI, Anthropic, and local LLM backends (via candle).
-- **Tool Ecosystem**: Standard library of tools for web search, file I/O, and database interaction.
-- **Observability Layer**: Tracing and metrics export via OpenTelemetry.
-- **Persistence Layer**: SQL backends (SQLite/Postgres) for long-term agent memory.
+- **Advanced Observability**: Distributed tracing and metrics export via OpenTelemetry.
+- **Streamed Execution**: WebSocket/Server-Sent Events for real-time progress monitoring.
 - **Sandboxing**: WASM-based tool execution for secure, isolated operations.
 
 ---
