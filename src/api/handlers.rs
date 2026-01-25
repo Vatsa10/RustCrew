@@ -27,10 +27,12 @@ pub struct AppState {
     pub runs: DashMap<Uuid, String>,
 }
 
+use crate::error::AppError;
+
 pub async fn create_crew(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<CreateCrewRequest>,
-) -> (StatusCode, Json<CrewResponse>) {
+) -> Result<(StatusCode, Json<CrewResponse>), AppError> {
     let mut agents = Vec::new();
     for spec in payload.agents {
         agents.push(Agent::new(&spec.name, &spec.role, &spec.goal, &spec.backstory));
@@ -49,14 +51,16 @@ pub async fn create_crew(
     let crew_arc = Arc::new(crew);
     state.crews.insert(crew_id, crew_arc);
 
-    (StatusCode::CREATED, Json(CrewResponse { id: crew_id, name: payload.name }))
+    Ok((StatusCode::CREATED, Json(CrewResponse { id: crew_id, name: payload.name })))
 }
 
 pub async fn start_run(
     State(state): State<Arc<AppState>>,
     Path(crew_id): Path<Uuid>,
-) -> Result<Json<RunResponse>, StatusCode> {
-    let _crew = state.crews.get(&crew_id).ok_or(StatusCode::NOT_FOUND)?.clone();
+) -> Result<Json<RunResponse>, AppError> {
+    let _crew = state.crews.get(&crew_id)
+        .ok_or_else(|| AppError::NotFound(format!("Crew {} not found", crew_id)))?
+        .clone();
     
     // In a real app, we'd clone or create a new run instance
     // For now, let's just trigger the scheduler in the background
@@ -77,7 +81,7 @@ pub async fn start_run(
 pub async fn get_run_status(
     State(state): State<Arc<AppState>>,
     Path(run_id): Path<Uuid>,
-) -> Result<Json<RunResponse>, StatusCode> {
-    let status = state.runs.get(&run_id).ok_or(StatusCode::NOT_FOUND)?;
+) -> Result<Json<RunResponse>, AppError> {
+    let status = state.runs.get(&run_id).ok_or_else(|| AppError::NotFound(format!("Run {} not found", run_id)))?;
     Ok(Json(RunResponse { id: run_id, status: status.clone() }))
 }

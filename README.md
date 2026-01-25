@@ -6,11 +6,11 @@
 
 ## Core Features
 
-- **Asynchronous Service**: Built on top of `tokio` and `axum` as a managed service for remote agent orchestration.
+- **Asynchronous Service**: Built on top of `tokio` and `axum` as a managed service for remote agent orchestration with graceful shutdown support.
+- **Robust Infrastructure**: Centralized configuration management and unified error handling for reliable production operations.
 - **DAG-Based Task Scheduling**: Implements a directed acyclic graph (DAG) scheduler that resolves dependencies and parallelizes independent tasks.
 - **Persistent Memory**: Deep integration with `sqlx` providing SQLite/Postgres persistence for long-running workflows and auditability.
 - **RESTful Orchestration**: Standardized API for managing Crew specifications, tracking task state, and monitoring execution runs.
-- **Role-Based Agent Model**: Define agents with discrete roles, operational goals, and backstories for specialized execution.
 - **Extensible Tooling**: A robust `Tool` trait for building custom capabilities with built-in support for network and filesystem operations.
 
 ---
@@ -24,15 +24,17 @@ RustCrew includes a standard library of tools to accelerate agent development:
 
 ---
 
-## Technical Start
+## Getting Started
 
-### Running the Orchestrator
+For a detailed walkthrough of how to install, configure, and run RustCrew, please see the **[Setup Guide](SETUP.md)**.
 
-Start the RustCrew server:
+### Quick Start
 
-```bash
-cargo run
-```
+1. **Configure**: Create a `.env` file with `SERVER_PORT` and `DATABASE_URL`.
+2. **Run**: Start the server.
+   ```bash
+   cargo run
+   ```
 
 The server will listen on `0.0.0.0:3000` by default.
 
@@ -78,13 +80,14 @@ You can define a crew and initiate a run via the REST API. The following demonst
 
 Initiates the background scheduler to resolve the task graph.
 
+3. **Interact**: The server listens on `0.0.0.0:3000` by default.
 ---
 
 ## System Architecture
 
 RustCrew is engineered with modularity at its core:
 
-- **API Layer**: Axum-based endpoints for managing resources and internal state.
+- **API Layer**: Axum-based endpoints for managing resources and internal state, backed by unified error handling.
 - **Execution Engine**: An asynchronous scheduler that manages the task lifecycle and worker synchronization.
 - **Persistence Layer**: SQL-backed storage using `sqlx` (SQLite/Postgres) for task tracking and execution history.
 - **Memory System**: Hybrid architecture supporting thread-safe in-memory caching and persistent SQL storage.
@@ -94,10 +97,7 @@ RustCrew is engineered with modularity at its core:
 
 ## Roadmap
 
-- [ ] **Inference Adapters**: Integration with OpenAI, Anthropic, and local LLM backends (via candle).
-- [ ] **Advanced Observability**: Distributed tracing and metrics export via OpenTelemetry.
-- [ ] **Streamed Execution**: WebSocket/Server-Sent Events for real-time progress monitoring.
-- [ ] **Sandboxing**: WASM-based tool execution for secure, isolated operations.
+See [todo.md](.ai/todo.md) for the detailed project roadmap and current progress.
 
 ---
 
