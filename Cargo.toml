@@ -23,3 +23,11 @@ chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2.0"
 dotenvy = "0.15"
 directories = "6.0"
+
+[lib]
+name = "rustcrew"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rustcrew"
+path = "src/main.rs"
