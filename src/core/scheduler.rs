@@ -77,20 +77,40 @@ impl Scheduler {
     }
 
     async fn execute_task(crew: Arc<Mutex<Crew>>, task_id: Uuid) {
-        let (description, _agent_id) = {
+        let (description, agent_id, llm, memory) = {
             let mut crew_lock = crew.lock().await;
+            let memory = crew_lock.memory.clone();
+            
             if let Some(task) = crew_lock.task_map.get_mut(&task_id) {
                 task.status = TaskStatus::Running;
                 println!("Executing task: {}", task.description);
-                (task.description.clone(), task.assigned_agent_id)
+                
+                let agent_id = task.assigned_agent_id;
+                let agent_llm = agent_id.and_then(|id| {
+                    crew_lock.agents.iter()
+                        .find(|a| a.id == id)
+                        .and_then(|a| a.llm.clone())
+                });
+
+                (task.description.clone(), agent_id, agent_llm, memory)
             } else {
                 return;
             }
         };
 
-        // Simulate execution
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-        let output = format!("Executed: {}", description);
+        let output = if let Some(llm_adapter) = llm {
+            // In a real scenario, we'd build a prompt including agent backstory, goals, etc.
+            llm_adapter.completion(&description).await.unwrap_or_else(|e| format!("LLM Error: {}", e))
+        } else {
+            // Fallback for agents without LLMs or manual tasks
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            format!("Executed: {}", description)
+        };
+
+        // Persist to short-term memory if configured
+        if let Some(mem) = memory {
+            let _ = mem.store(&task_id.to_string(), &output).await;
+        }
 
         {
             let mut crew_lock = crew.lock().await;
