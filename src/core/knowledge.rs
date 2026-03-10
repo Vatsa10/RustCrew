@@ -27,3 +27,18 @@ impl KnowledgeBase {
             .collect()
     }
 }
+
+pub struct MockEmbedder;
+
+impl Debug for MockEmbedder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MockEmbedder")
+    }
+}
+
+#[async_trait]
+impl Embedder for MockEmbedder {
+    async fn embed(&self, _text: &str) -> Result<Vec<f32>, String> {
+        Ok(vec![0.0; 384]) // Mocked 384-dim vector
+    }
+}

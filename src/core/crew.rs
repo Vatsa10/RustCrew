@@ -42,6 +42,7 @@ pub struct Crew {
     pub status: CrewStatus,
     pub messages: Vec<Message>,
     pub blackboard: HashMap<String, String>,
+    pub consensus_sessions: HashMap<Uuid, crate::core::collaboration::ConsensusSession>,
 }
 
 impl Crew {
@@ -56,6 +57,7 @@ impl Crew {
             status: CrewStatus::Idle,
             messages: Vec::new(),
             blackboard: HashMap::new(),
+            consensus_sessions: HashMap::new(),
         }
     }
 

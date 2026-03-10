@@ -5,3 +5,4 @@ pub mod scheduler;
 pub mod llm;
 pub mod knowledge;
 pub mod policy;
+pub mod collaboration;

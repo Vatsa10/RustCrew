@@ -3,6 +3,9 @@ pub mod file;
 pub mod web_search;
 pub mod github;
 pub mod interpreter;
+pub mod browser;
+pub mod database;
+pub mod vector_lookup;
 
 use async_trait::async_trait;
 use std::fmt::Debug;
