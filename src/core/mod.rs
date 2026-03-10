@@ -6,3 +6,5 @@ pub mod llm;
 pub mod knowledge;
 pub mod policy;
 pub mod collaboration;
+pub mod planning;
+pub mod reasoning;

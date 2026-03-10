@@ -46,14 +46,30 @@ pub trait Critic: Send + Sync {
     async fn critique(&self, task_output: &str) -> Result<String, String>;
 }
 
+use std::sync::Arc;
+use crate::core::llm::LlmAdapter;
+
 pub struct VerifierAgent {
     pub instructions: String,
+    pub llm: Arc<dyn LlmAdapter>,
+}
+
+impl VerifierAgent {
+    pub fn new(instructions: &str, llm: Arc<dyn LlmAdapter>) -> Self {
+        Self {
+            instructions: instructions.to_string(),
+            llm,
+        }
+    }
 }
 
 #[async_trait::async_trait]
 impl Critic for VerifierAgent {
-    async fn critique(&self, _task_output: &str) -> Result<String, String> {
-        // In a real implementation, this would call an LLM with 'instructions' and 'task_output'
-        Ok(format!("Critique (using instructions: {}): Input seems valid.", self.instructions))
+    async fn critique(&self, task_output: &str) -> Result<String, String> {
+        let prompt = format!(
+            "Evaluate the following output based on these instructions:\nInstructions: {}\nOutput: {}\nPlease provide a critique and determine if it's valid.",
+            self.instructions, task_output
+        );
+        self.llm.completion(&prompt).await
     }
 }

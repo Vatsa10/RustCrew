@@ -6,28 +6,19 @@ use axum::{
 use uuid::Uuid;
 use crate::api::models::{CreateCrewRequest, CrewResponse, RunResponse};
 use crate::core::crew::Crew;
+use crate::core::scheduler::Scheduler;
 use std::sync::Arc;
-use dashmap::DashMap; // This import is used by AppState
+use tokio::sync::Mutex;
+use dashmap::DashMap;
 
-// Agent and Task are used in create_crew, so they need to be imported.
-// Assuming they are in `crate::core::agent` and `crate::core::task` based on common Rust project structure.
-// If they are in `crate::core::crew` then they would be `Crew::Agent` and `Crew::Task` or similar.
-// Based on the original code `Agent::new` and `Task::new` are used, implying they are top-level or module-level imports.
-// The original code did not have these imports, which would cause a compile error.
-// To make the resulting file syntactically correct, I will add them, assuming they come from `crate::core::agent` and `crate::core::task`.
-// If the user meant for these to be removed because they are not explicitly imported in the *original* snippet,
-// then the original snippet was already syntactically incorrect regarding these types.
-// Given the instruction is to remove *unused* imports, and these *are* used, they should be present.
-// I will add them to ensure the code is syntactically correct after the change.
 use crate::core::agent::Agent;
 use crate::core::task::Task;
+use crate::error::AppError;
 
 pub struct AppState {
-    pub crews: DashMap<Uuid, Arc<Crew>>,
+    pub crews: DashMap<Uuid, Arc<Mutex<Crew>>>,
     pub runs: DashMap<Uuid, String>,
 }
-
-use crate::error::AppError;
 
 pub async fn create_crew(
     State(state): State<Arc<AppState>>,
@@ -48,7 +39,7 @@ pub async fn create_crew(
     }
 
     let crew_id = crew.id;
-    let crew_arc = Arc::new(crew);
+    let crew_arc = Arc::new(Mutex::new(crew));
     state.crews.insert(crew_id, crew_arc);
 
     Ok((StatusCode::CREATED, Json(CrewResponse { id: crew_id, name: payload.name })))
@@ -58,21 +49,24 @@ pub async fn start_run(
     State(state): State<Arc<AppState>>,
     Path(crew_id): Path<Uuid>,
 ) -> Result<Json<RunResponse>, AppError> {
-    let _crew = state.crews.get(&crew_id)
+    let crew_arc = state.crews.get(&crew_id)
         .ok_or_else(|| AppError::NotFound(format!("Crew {} not found", crew_id)))?
         .clone();
     
-    // In a real app, we'd clone or create a new run instance
-    // For now, let's just trigger the scheduler in the background
     let run_id = Uuid::new_v4();
-    state.runs.insert(run_id, "Started".to_string());
+    state.runs.insert(run_id, "Running".to_string());
     
     let state_clone = state.clone();
     tokio::spawn(async move {
-        // This is a bit hacky because Crew doesn't implement Clone easily with Arc tools
-        // We'll just print for now or Implement proper run logic
-        println!("Background run started for crew: {}", crew_id);
-        state_clone.runs.insert(run_id, "Completed".to_string());
+        let scheduler = Scheduler { crew: crew_arc };
+        match scheduler.run().await {
+            Ok(_) => {
+                state_clone.runs.insert(run_id, "Completed".to_string());
+            }
+            Err(e) => {
+                state_clone.runs.insert(run_id, format!("Failed: {}", e));
+            }
+        }
     });
 
     Ok(Json(RunResponse { id: run_id, status: "Started".to_string() }))
