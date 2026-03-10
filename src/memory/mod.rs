@@ -1,6 +1,9 @@
 pub mod in_memory;
 pub mod sql;
 pub mod short_term;
+pub mod vector;
+pub mod entity;
+pub mod contextual;
 
 use async_trait::async_trait;
 use std::fmt::Debug;

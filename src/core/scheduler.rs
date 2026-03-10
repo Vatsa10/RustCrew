@@ -1,4 +1,5 @@
 use crate::core::crew::Crew;
+use chrono;
 use crate::core::task::TaskStatus;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -20,11 +21,21 @@ impl Scheduler {
     pub async fn run(&self) -> Result<(), String> {
         let mut completed_tasks = HashSet::new();
         let tasks_to_run = {
-            let crew = self.crew.lock().await;
+            let mut crew = self.crew.lock().await;
+            crew.status = crate::core::crew::CrewStatus::Running;
             crew.tasks.clone()
         };
 
         loop {
+            // Check for cancellation
+            if {
+                let crew = self.crew.lock().await;
+                crew.status == crate::core::crew::CrewStatus::Cancelled
+            } {
+                println!("Crew execution cancelled.");
+                return Ok(());
+            }
+
             let mut pending_tasks = Vec::new();
             {
                 let crew = self.crew.lock().await;
@@ -46,17 +57,19 @@ impl Scheduler {
             }
 
             if pending_tasks.is_empty() {
-                let crew = self.crew.lock().await;
+                let mut crew = self.crew.lock().await;
                 let all_done = tasks_to_run.iter().all(|id| {
-                    crew.task_map.get(id).map_or(false, |t| matches!(t.status, TaskStatus::Completed | TaskStatus::Failed(_)))
+                    crew.task_map.get(id).map_or(false, |t| matches!(t.status, TaskStatus::Completed | TaskStatus::Failed(_) | TaskStatus::TimedOut))
                 });
                 if all_done {
+                    crew.status = crate::core::crew::CrewStatus::Completed;
                     break;
                 }
-                // If not all done but no pending, we might have a deadlock or waiting for async tasks
                 tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                 continue;
             }
+            
+            pending_tasks.sort(); // Sort Uuids for deterministic execution order
 
             let mut futures = FuturesUnordered::new();
             for task_id in pending_tasks {
@@ -77,7 +90,7 @@ impl Scheduler {
     }
 
     async fn execute_task(crew: Arc<Mutex<Crew>>, task_id: Uuid) {
-        let (description, agent_id, llm, memory) = {
+        let (description, agent_id, memory, retry_policy, timeout) = {
             let mut crew_lock = crew.lock().await;
             let memory = crew_lock.memory.clone();
             
@@ -85,39 +98,108 @@ impl Scheduler {
                 task.status = TaskStatus::Running;
                 println!("Executing task: {}", task.description);
                 
+                let desc = task.description.clone();
                 let agent_id = task.assigned_agent_id;
-                let agent_llm = agent_id.and_then(|id| {
-                    crew_lock.agents.iter()
-                        .find(|a| a.id == id)
-                        .and_then(|a| a.llm.clone())
+                let policy = task.retry_policy.clone();
+                let timeout = task.timeout;
+                
+                crew_lock.execution_trace.push(crate::core::crew::ExecutionEvent {
+                    timestamp: chrono::Utc::now(),
+                    task_id,
+                    event_type: "started".to_string(),
+                    data: None,
                 });
-
-                (task.description.clone(), agent_id, agent_llm, memory)
+                
+                (desc, agent_id, memory, policy, timeout)
             } else {
                 return;
             }
         };
 
-        let output = if let Some(llm_adapter) = llm {
-            // In a real scenario, we'd build a prompt including agent backstory, goals, etc.
-            llm_adapter.completion(&description).await.unwrap_or_else(|e| format!("LLM Error: {}", e))
-        } else {
-            // Fallback for agents without LLMs or manual tasks
-            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-            format!("Executed: {}", description)
-        };
+        let mut attempts = 0;
+        let mut last_error = String::from("Unknown error");
 
-        // Persist to short-term memory if configured
-        if let Some(mem) = memory {
-            let _ = mem.store(&task_id.to_string(), &output).await;
+        while attempts < retry_policy.max_attempts {
+            attempts += 1;
+            
+            let llm = if let Some(id) = agent_id {
+                let crew_lock = crew.lock().await;
+                crew_lock.agents.iter()
+                    .find(|a| a.id == id)
+                    .and_then(|a| a.llm.clone())
+            } else {
+                None
+            };
+
+            let execution_result = if let Some(llm_adapter) = llm {
+                if let Some(t) = timeout {
+                    match tokio::time::timeout(t, llm_adapter.completion(&description)).await {
+                        Ok(Ok(res)) => Ok(res),
+                        Ok(Err(e)) => Err(e),
+                        Err(_) => Err("Task timed out".to_string()),
+                    }
+                } else {
+                    llm_adapter.completion(&description).await
+                }
+            } else {
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                Ok(format!("Executed: {}", description))
+            };
+
+            match execution_result {
+                Ok(output) => {
+                    if let Some(mem) = memory {
+                        let _ = mem.store(&task_id.to_string(), &output).await;
+                    }
+
+                    {
+                        let mut crew_lock = crew.lock().await;
+                        if let Some(task) = crew_lock.task_map.get_mut(&task_id) {
+                            task.status = TaskStatus::Completed;
+                            task.output = Some(output.clone());
+                        }
+                        crew_lock.execution_trace.push(crate::core::crew::ExecutionEvent {
+                            timestamp: chrono::Utc::now(),
+                            task_id,
+                            event_type: "completed".to_string(),
+                            data: Some(output),
+                        });
+                    }
+                    return;
+                }
+                Err(e) => {
+                    last_error = e.clone();
+                    {
+                        let mut crew_lock = crew.lock().await;
+                        crew_lock.execution_trace.push(crate::core::crew::ExecutionEvent {
+                            timestamp: chrono::Utc::now(),
+                            task_id,
+                            event_type: "failed_attempt".to_string(),
+                            data: Some(e),
+                        });
+                    }
+                    if attempts < retry_policy.max_attempts {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(retry_policy.backoff_ms)).await;
+                    }
+                }
+            }
         }
 
         {
             let mut crew_lock = crew.lock().await;
             if let Some(task) = crew_lock.task_map.get_mut(&task_id) {
-                task.status = TaskStatus::Completed;
-                task.output = Some(output);
+                task.status = if last_error.contains("timed out") {
+                    TaskStatus::TimedOut
+                } else {
+                    TaskStatus::Failed(last_error.clone())
+                };
             }
+            crew_lock.execution_trace.push(crate::core::crew::ExecutionEvent {
+                timestamp: chrono::Utc::now(),
+                task_id,
+                event_type: "final_failure".to_string(),
+                data: Some(last_error),
+            });
         }
     }
 }

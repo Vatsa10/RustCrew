@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use std::time::Duration;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum TaskStatus {
@@ -7,6 +8,19 @@ pub enum TaskStatus {
     Running,
     Completed,
     Failed(String),
+    TimedOut,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RetryPolicy {
+    pub max_attempts: u32,
+    pub backoff_ms: u64,
+}
+
+impl Default for RetryPolicy {
+    fn default() -> Self {
+        Self { max_attempts: 1, backoff_ms: 1000 }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -18,6 +32,8 @@ pub struct Task {
     pub dependencies: Vec<Uuid>,
     pub status: TaskStatus,
     pub output: Option<String>,
+    pub retry_policy: RetryPolicy,
+    pub timeout: Option<Duration>,
 }
 
 impl Task {
@@ -30,6 +46,8 @@ impl Task {
             dependencies: Vec::new(),
             status: TaskStatus::Pending,
             output: None,
+            retry_policy: RetryPolicy::default(),
+            timeout: Some(Duration::from_secs(300)), // Default 5 mins
         }
     }
 
@@ -40,6 +58,16 @@ impl Task {
 
     pub fn add_dependency(mut self, task_id: Uuid) -> Self {
         self.dependencies.push(task_id);
+        self
+    }
+
+    pub fn with_retry(mut self, policy: RetryPolicy) -> Self {
+        self.retry_policy = policy;
+        self
+    }
+
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
         self
     }
 }
